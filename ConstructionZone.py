@@ -3,6 +3,7 @@ import numpy as np
 import os
 import pickle
 import time
+from scipy.fftpack import fft
 
 genres = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
 TRAINING_FILE_NAME = "TrainingData.pkl"
@@ -22,7 +23,8 @@ def loadTrainingData():
                 if filename == '.DS_Store':
                     continue
                 f = sunau.Au_read('genres/genres/' + genre + '/' + filename)
-                audio_data = np.frombuffer(f.readframes(numframes), dtype=np.int16)
+                # Fast Fourier on readframes data to pull out most important features
+                audio_data = fft(np.frombuffer(f.readframes(numframes), dtype=np.int16))
                 audio_data_list = np.append(audio_data, [num]).tolist()
                 training_data.append(audio_data_list)
         savePickle(training_data, TRAINING_FILE_NAME)
