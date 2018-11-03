@@ -27,3 +27,4 @@ validation/
 # To keep IDE files you don't care about out of the repo
 
 *.idea
+*.code-workspace
