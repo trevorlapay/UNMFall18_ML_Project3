@@ -4,7 +4,11 @@ import os
 import pickle
 import time
 from scipy.fftpack import fft
-
+from pathlib import Path
+from scipy.io import wavfile
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import specgram
+import subprocess
 genres = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
 TRAINING_FILE_NAME = "TrainingData.pkl"
 numframes = 1000
@@ -34,8 +38,33 @@ def loadTrainingData():
     for item in training_data:
         print(item)
 
+def auToWav():
+    directories = [Path(tpl[0]) for tpl in os.walk(Path('.'))]
+    for directory in directories:
+        print(str(directory))
+        for file in os.listdir(directory):
+            if file[-3:] == '.au':
+                print("    " + file)
+                subprocess.run(["sox", str(directory / file), str(directory / (file[:-3] + ".wav"))])
+
+
+def spectrograms():
+    directories = [Path(tpl[0]) for tpl in os.walk(Path('.'))]
+    for directory in directories:
+        print(str(directory))
+        for file in os.listdir(directory):
+            if file[-4:] == '.wav':
+                sample_rate, X = wavfile.read(directory/file)
+                print("    "+file)
+                specgram(X, Fs=sample_rate, xextent=(0,30))
+                plt.show()
+                break # Remove this to plot all the files, not just the first of each genre.
+
+
 def main():
-    loadTrainingData()
+    # loadTrainingData()
+    # auToWav()
+    spectrograms()
 
 
 
