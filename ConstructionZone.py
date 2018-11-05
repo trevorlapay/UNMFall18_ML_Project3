@@ -1,4 +1,5 @@
 import sunau
+import scipy
 import numpy as np
 import os
 import pickle
@@ -9,15 +10,29 @@ from scipy.io import wavfile
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import specgram
 import subprocess
+import keras
+from keras.models import Sequential,Input,Model
+from keras.layers import Dense, Dropout, Flatten
+from keras.layers import Conv2D, MaxPooling2D
+from keras.utils import to_categorical
+from keras.layers.normalization import BatchNormalization
+from keras.layers.advanced_activations import LeakyReLU
+from sklearn.model_selection import train_test_split
+
 genres = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
 TRAINING_FILE_NAME = "TrainingData.pkl"
 numframes = 1000
+batch_size = 64
+epochs = 20
+num_classes = 10
+music_model = None
+
 
 # Load training data for each file as integer array using sunau.
 # Each class gets an integer value (0-9) appended to each list.
 # Unpack the files in our project directory as-is for this to work.
 
-def loadTrainingData():
+def loadTrainingDataAu():
     training_data = []
     try:
         training_data = loadPickle(TRAINING_FILE_NAME)
@@ -37,6 +52,52 @@ def loadTrainingData():
     # Sanity dump for values.
     for item in training_data:
         print(item)
+
+def loadTrainingDataWav():
+    training_data = []
+    testing_data = []
+    labels = []
+    for num, genre in enumerate(genres):
+        for filename in os.listdir('genres/genres/' + genre):
+            if not filename.endswith((".wav")):
+                continue
+            sample_rate, X = scipy.io.wavfile.read('genres/genres/' + genre + "/" + filename)
+            # Fast Fourier on readframes data to pull out most important features
+            audio_data = abs(scipy.fft(X)[:1000])
+            audio_data_list = audio_data.tolist()
+            labels.append(num)
+            training_data.append(audio_data_list)
+    training_matrix = np.array(training_data)
+    label_matrix_hot = to_categorical(np.array(labels))
+    # check training data shape
+    print(training_matrix.shape)
+    train_X, valid_X, train_label, valid_label = train_test_split(training_matrix, label_matrix_hot, test_size=0.2,
+                                                                  random_state=13)
+    createModel()
+    fashion_train = music_model.fit(train_X, train_label, batch_size=batch_size, epochs=epochs, verbose=1,
+                                      validation_data=(valid_X, valid_label))
+
+
+
+def createModel():
+    # I scraped some of this off of a demo page. This is only for getting things off the ground and NOT for use in submittal
+    global music_model
+    music_model = Sequential()
+    music_model.add(Conv2D(32, kernel_size=(3, 3), activation='linear', input_shape=(780, 1000), padding='same'))
+    music_model.add(LeakyReLU(alpha=0.1))
+    music_model.add(MaxPooling2D((2, 2), padding='same'))
+    music_model.add(Conv2D(64, (3, 3), activation='linear', padding='same'))
+    music_model.add(LeakyReLU(alpha=0.1))
+    music_model.add(MaxPooling2D(pool_size=(2, 2), padding='same'))
+    music_model.add(Conv2D(128, (3, 3), activation='linear', padding='same'))
+    music_model.add(LeakyReLU(alpha=0.1))
+    music_model.add(MaxPooling2D(pool_size=(2, 2), padding='same'))
+    music_model.add(Flatten())
+    music_model.add(Dense(128, activation='linear'))
+    music_model.add(LeakyReLU(alpha=0.1))
+    music_model.add(Dense(num_classes, activation='softmax'))
+    music_model.compile(loss=keras.losses.categorical_crossentropy, optimizer=keras.optimizers.Adam(),metrics=['accuracy'])
+    print(music_model.summary())
 
 def auToWav():
     directories = [Path(tpl[0]) for tpl in os.walk(Path('.'))]
@@ -64,7 +125,9 @@ def spectrograms():
 def main():
     # loadTrainingData()
     # auToWav()
-    spectrograms()
+    # spectrograms()
+    loadTrainingDataWav()
+    createModel()
 
 
 
