@@ -10,22 +10,19 @@ from scipy.io import wavfile
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import specgram
 import subprocess
-import keras
-from keras.models import Sequential,Input,Model
-from keras.layers import Dense, Dropout, Flatten
-from keras.layers import Conv2D, MaxPooling2D
+import tensorflow
+from keras.layers import Dense, Dropout
+from keras.layers import Conv1D
 from keras.utils import to_categorical
-from keras.layers.normalization import BatchNormalization
-from keras.layers.advanced_activations import LeakyReLU
 from sklearn.model_selection import train_test_split
-
+from tensorflow.keras.layers import Dense, Dropout
 genres = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
 TRAINING_FILE_NAME = "TrainingData.pkl"
 numframes = 1000
 batch_size = 64
-epochs = 20
+epochs = 100
 num_classes = 10
-music_model = None
+SEED = 42
 
 
 # Load training data for each file as integer array using sunau.
@@ -55,10 +52,9 @@ def loadTrainingDataAu():
 
 def loadTrainingDataWav():
     training_data = []
-    testing_data = []
     labels = []
     for num, genre in enumerate(genres):
-        for filename in os.listdir('genres/genres/' + genre):
+        for track_num, filename in enumerate(os.listdir('genres/genres/' + genre)):
             if not filename.endswith((".wav")):
                 continue
             sample_rate, X = scipy.io.wavfile.read('genres/genres/' + genre + "/" + filename)
@@ -68,25 +64,31 @@ def loadTrainingDataWav():
             labels.append(num)
             training_data.append(audio_data_list)
     training_matrix = np.array(training_data)
-    label_matrix_hot = to_categorical(np.array(labels))
-    # check training data shape
     print(training_matrix.shape)
-    train_X, valid_X, train_label, valid_label = train_test_split(training_matrix, label_matrix_hot, test_size=0.2,
-                                                                  random_state=13)
-    createModel()
-    fashion_train = music_model.fit(train_X, train_label, batch_size=batch_size, epochs=epochs, verbose=1,
-                                      validation_data=(valid_X, valid_label))
+    # Convert labels to array of binary values (colloquially known as one hot labels)
+    label_matrix_hot = to_categorical(np.array(labels))
+    return training_matrix, label_matrix_hot
 
 
+def splitTraining(training_matrix, label_matrix_hot):
+    (x_train, x_val, y_train, y_val) = train_test_split(training_matrix, label_matrix_hot, test_size=0.3,
+                                                        random_state=SEED)
+    return x_train, y_train, x_val, y_val
 
-def createModel():
-    # I scraped some of this off of a demo page. This is only for getting things off the ground and NOT for use in submittal
-    global music_model
-    music_model = Sequential()
-    music_model.add(Dense(12, input_dim=1000, activation='relu'))
-    music_model.add(Dense(8, activation='relu'))
-    music_model.add(Dense(10, activation='sigmoid'))
-    music_model.compile(loss=keras.losses.categorical_crossentropy, optimizer=keras.optimizers.Adam(),metrics=['accuracy'])
+def createModel(x_train, y_train, x_val, y_val):
+    model = tensorflow.keras.models.Sequential()
+    x_train = tensorflow.keras.utils.normalize(x_train, axis=1)
+    x_val = tensorflow.keras.utils.normalize(x_val, axis=1)
+
+    model.add(tensorflow.keras.layers.Flatten())
+    model.add(Dense(128, activation=tensorflow.nn.relu))
+    model.add(Dropout(0.25))
+    model.add(Dense(128, activation=tensorflow.nn.relu))
+    model.add(Dense(10, activation=tensorflow.nn.softmax))
+
+    model.compile(optimizer="adam", loss="categorical_crossentropy",metrics=['accuracy'])
+
+    model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=1, validation_data=(x_val, y_val))
 
 def auToWav():
     directories = [Path(tpl[0]) for tpl in os.walk(Path('.'))]
@@ -115,8 +117,10 @@ def main():
     # loadTrainingData()
     # auToWav()
     # spectrograms()
-    loadTrainingDataWav()
-    createModel()
+    training_matrix, label_matrix_hot = loadTrainingDataWav()
+    x_train, y_train, x_val, y_val = splitTraining(training_matrix, label_matrix_hot)
+    createModel(x_train, y_train, x_val, y_val)
+
 
 
 
