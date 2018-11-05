@@ -83,21 +83,10 @@ def createModel():
     # I scraped some of this off of a demo page. This is only for getting things off the ground and NOT for use in submittal
     global music_model
     music_model = Sequential()
-    music_model.add(Conv2D(32, kernel_size=(3, 3), activation='linear', input_shape=(780, 1000), padding='same'))
-    music_model.add(LeakyReLU(alpha=0.1))
-    music_model.add(MaxPooling2D((2, 2), padding='same'))
-    music_model.add(Conv2D(64, (3, 3), activation='linear', padding='same'))
-    music_model.add(LeakyReLU(alpha=0.1))
-    music_model.add(MaxPooling2D(pool_size=(2, 2), padding='same'))
-    music_model.add(Conv2D(128, (3, 3), activation='linear', padding='same'))
-    music_model.add(LeakyReLU(alpha=0.1))
-    music_model.add(MaxPooling2D(pool_size=(2, 2), padding='same'))
-    music_model.add(Flatten())
-    music_model.add(Dense(128, activation='linear'))
-    music_model.add(LeakyReLU(alpha=0.1))
-    music_model.add(Dense(num_classes, activation='softmax'))
+    music_model.add(Dense(12, input_dim=1000, activation='relu'))
+    music_model.add(Dense(8, activation='relu'))
+    music_model.add(Dense(10, activation='sigmoid'))
     music_model.compile(loss=keras.losses.categorical_crossentropy, optimizer=keras.optimizers.Adam(),metrics=['accuracy'])
-    print(music_model.summary())
 
 def auToWav():
     directories = [Path(tpl[0]) for tpl in os.walk(Path('.'))]
