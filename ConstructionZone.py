@@ -10,22 +10,20 @@ from scipy.io import wavfile
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import specgram
 import subprocess
-import keras
-from keras.models import Sequential,Input,Model
-from keras.layers import Dense, Dropout, Flatten
-from keras.layers import Conv2D, MaxPooling2D
+import tensorflow
+from keras.layers import Dense, Dropout
+from keras.layers import Conv1D
+from keras.models import model_from_json
 from keras.utils import to_categorical
-from keras.layers.normalization import BatchNormalization
-from keras.layers.advanced_activations import LeakyReLU
 from sklearn.model_selection import train_test_split
-
+from tensorflow.keras.layers import Dense, Dropout
 genres = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
 TRAINING_FILE_NAME = "TrainingData.pkl"
-numframes = 1000
+numframes = 650000
 batch_size = 64
-epochs = 20
+epochs = 30
 num_classes = 10
-music_model = None
+SEED = 42
 
 
 # Load training data for each file as integer array using sunau.
@@ -55,49 +53,86 @@ def loadTrainingDataAu():
 
 def loadTrainingDataWav():
     training_data = []
-    testing_data = []
     labels = []
     for num, genre in enumerate(genres):
-        for filename in os.listdir('genres/genres/' + genre):
+        for track_num, filename in enumerate(os.listdir('genres/genres/' + genre)):
             if not filename.endswith((".wav")):
                 continue
             sample_rate, X = scipy.io.wavfile.read('genres/genres/' + genre + "/" + filename)
             # Fast Fourier on readframes data to pull out most important features
-            audio_data = abs(scipy.fft(X)[:1000])
+            audio_data = abs(scipy.fft(X)[:numframes])
             audio_data_list = audio_data.tolist()
             labels.append(num)
             training_data.append(audio_data_list)
     training_matrix = np.array(training_data)
-    label_matrix_hot = to_categorical(np.array(labels))
-    # check training data shape
     print(training_matrix.shape)
-    train_X, valid_X, train_label, valid_label = train_test_split(training_matrix, label_matrix_hot, test_size=0.2,
-                                                                  random_state=13)
-    createModel()
-    fashion_train = music_model.fit(train_X, train_label, batch_size=batch_size, epochs=epochs, verbose=1,
-                                      validation_data=(valid_X, valid_label))
+    # Convert labels to array of binary values (colloquially known as one hot labels)
+    label_matrix_hot = to_categorical(np.array(labels))
+    return training_matrix, label_matrix_hot
 
+def loadTestingDataWav():
+    testing_data = []
+    for track_num, filename in enumerate(os.listdir('validation/rename/')):
+        if not filename.endswith((".wav")):
+            continue
+        sample_rate, X = scipy.io.wavfile.read('validation/rename/' + filename)
+        # Fast Fourier on readframes data to pull out most important features
+        audio_data = abs(scipy.fft(X)[:numframes])
+        audio_data_list = audio_data.tolist()
+        testing_data.append(audio_data_list)
+    testing_matrix = np.array(testing_data)
+    print(testing_matrix.shape)
+    return testing_matrix
 
+def getTestingFilenames():
+    testfiles= []
+    for track_num, filename in enumerate(os.listdir('validation/rename/')):
+        if not filename.endswith((".wav")):
+            continue
+        testfiles.append(filename[:-4])
+    return testfiles
 
-def createModel():
-    # I scraped some of this off of a demo page. This is only for getting things off the ground and NOT for use in submittal
-    global music_model
-    music_model = Sequential()
-    music_model.add(Conv2D(32, kernel_size=(3, 3), activation='linear', input_shape=(780, 1000), padding='same'))
-    music_model.add(LeakyReLU(alpha=0.1))
-    music_model.add(MaxPooling2D((2, 2), padding='same'))
-    music_model.add(Conv2D(64, (3, 3), activation='linear', padding='same'))
-    music_model.add(LeakyReLU(alpha=0.1))
-    music_model.add(MaxPooling2D(pool_size=(2, 2), padding='same'))
-    music_model.add(Conv2D(128, (3, 3), activation='linear', padding='same'))
-    music_model.add(LeakyReLU(alpha=0.1))
-    music_model.add(MaxPooling2D(pool_size=(2, 2), padding='same'))
-    music_model.add(Flatten())
-    music_model.add(Dense(128, activation='linear'))
-    music_model.add(LeakyReLU(alpha=0.1))
-    music_model.add(Dense(num_classes, activation='softmax'))
-    music_model.compile(loss=keras.losses.categorical_crossentropy, optimizer=keras.optimizers.Adam(),metrics=['accuracy'])
-    print(music_model.summary())
+def splitTraining(training_matrix, label_matrix_hot):
+    (x_train, x_val, y_train, y_val) = train_test_split(training_matrix, label_matrix_hot, test_size=0.3,
+                                                        random_state=SEED)
+    return x_train, y_train, x_val, y_val
+
+def loadCompileModel():
+    model = tensorflow.keras.models.Sequential()
+    model.add(tensorflow.keras.layers.Flatten(input_shape=(numframes, )))
+    model.add(Dense(128, activation=tensorflow.nn.relu))
+    model.add(Dropout(0.25))
+    model.add(Dense(128, activation=tensorflow.nn.relu))
+    model.add(Dense(10, activation=tensorflow.nn.softmax))
+    model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=['accuracy'])
+    return model
+
+def fitModel(x_train, y_train, x_val, y_val):
+
+    x_train = tensorflow.keras.utils.normalize(x_train, axis=1)
+    x_val = tensorflow.keras.utils.normalize(x_val, axis=1)
+
+    model = loadCompileModel()
+    model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=1, validation_data=(x_val, y_val))
+
+def fitModelNoSplit(x_train, y_train):
+    model = loadCompileModel()
+    x_train = tensorflow.keras.utils.normalize(x_train, axis=1)
+    model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=1)
+    evalSerialize(model, x_train, y_train)
+
+def evalSerialize(model, x_train, y_train):
+    # evaluate the model
+    scores = model.evaluate(x_train, y_train, verbose=1)
+    print("%s: %.2f%%" % (model.metrics_names[1], scores[1] * 100))
+
+    # serialize model to JSON
+    model_json = model.to_json()
+    with open("model.json", "w") as json_file:
+        json_file.write(model_json)
+    # serialize weights to HDF5
+    model.save_weights("model.h5")
+    print("Saved model to disk")
 
 def auToWav():
     directories = [Path(tpl[0]) for tpl in os.walk(Path('.'))]
@@ -122,14 +157,38 @@ def spectrograms():
                 break # Remove this to plot all the files, not just the first of each genre.
 
 
+def predict(model):
+    prediction = model.predict(loadTestingDataWav())
+    predictions = []
+    for encoding in prediction:
+        predictions.append(genres[encoding.tolist().index(1)])
+    zip_predictions = zip(getTestingFilenames(), predictions)
+    print(zip_predictions)
+    file = open('submit.txt', 'w')
+    file.write("id,class\n")
+    for pred in zip_predictions:
+        file.write(pred[0] + ".au," + pred[1] + '\n')
+    file.close()
+
+
 def main():
+    # To generate model files, run the fitModelNoSplit method. This will serialize
+    # your weights so you don't need to generate them again.
     # loadTrainingData()
     # auToWav()
     # spectrograms()
-    loadTrainingDataWav()
-    createModel()
+    training_matrix, label_matrix_hot = loadTrainingDataWav()
+    fitModelNoSplit(training_matrix, label_matrix_hot)
+    model = loadModelFromJSON()
+    model.compile(optimizer="adam", loss="categorical_crossentropy",metrics=['accuracy'])
+    predict(model)
 
-
+def loadModelFromJSON():
+    model = loadCompileModel()
+    # load weights into new model
+    model.load_weights("model.h5")
+    print("Loaded model from disk")
+    return model
 
 #%% Define pickle file functions
 def savePickle(obj, fileName=None):
