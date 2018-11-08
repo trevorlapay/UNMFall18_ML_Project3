@@ -16,8 +16,8 @@ IMAGE_TYPE = ".png"
 PLOT_HIGHT = 1 # inches
 DPI = 225 # dots per inch
 REPLACE_EXISTING = False
-PRINT_SKIPS = False
-NUM_THREADS = 4
+PRINT_SKIPS = True
+NUM_THREADS = 8
 
 pathstr = sys.argv[1] if len(sys.argv) > 1 is not None else "genres/genres/"
 
@@ -48,7 +48,7 @@ def process_data(threadID, q, fig, ax):
         if not workQueue.empty():
             audPath, imgPath = q.get()
             queueLock.release()
-            print("thread_"+str(threadID)+" processing " + audPath.name+'\n')
+            print("thread_"+str(threadID)+" processing " + audPath.name)
             autopng(audPath, imgPath, fig, ax)
         else:
             queueLock.release()
