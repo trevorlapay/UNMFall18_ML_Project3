@@ -37,4 +37,4 @@ for subplot_row, (directory, files) in enumerate(allFilesByDir.items()):
         ax[subplot_row, subplot_col].set_title((directory.name + " {}").format(rand))
 
 # plt.show()
-plt.savefig('Spectrograms', dpi=300)
+plt.savefig('Spectrogram Samples', dpi=300)

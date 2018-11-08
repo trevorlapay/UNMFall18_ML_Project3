@@ -11,10 +11,21 @@ import os
 from pathlib import Path
 import subprocess
 
-directories = [Path(tpl[0]) for tpl in os.walk(Path(sys.argv[1]))]
+REPLACE_EXISTING = False
+PRINT_SKIPS = True
+
+pathstr = sys.argv[1] if len(sys.argv) > 1 is not None else "genres/genres/"
+
+directories = [Path(tpl[0]) for tpl in os.walk(Path(pathstr))]
 for directory in directories:
     print(str(directory))
-    for file in os.listdir(directory):
-        if file[-3:] == '.au':
-            print("    "+file)
+    files = os.listdir(directory)
+    for file in [f for f in files if f[-3:] == '.au']:
+        if REPLACE_EXISTING or (file[:-3]+".wav") not in files:
+            print(' '*(len(str(directory.parent))+1)+file)
             subprocess.run(["sox", str(directory/file), str(directory/(file[:-3]+".wav"))])
+#            break
+        elif PRINT_SKIPS:
+            print(' '*(len(str(directory.parent))+1)+(file[:-3]+".wav")+" already exists. Skipping.")
+#    if len([f for f in files if f[-3:] == '.au']) > 0:
+#        break
