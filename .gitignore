@@ -21,6 +21,8 @@ validation/
 *.rar
 *.tar
 *.zip
+*.json
+*.h5
 
 # Pycharm stuff #
 #################
