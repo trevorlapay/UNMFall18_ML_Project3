@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from matplotlib.pyplot import specgram
 import subprocess
 import tensorflow
+import librosa
 from keras.layers import Dense, Dropout
 from keras.layers import Conv1D
 from keras.models import model_from_json
@@ -19,11 +20,12 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras.layers import Dense, Dropout
 genres = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
 TRAINING_FILE_NAME = "TrainingData.pkl"
-numframes = 650000
-batch_size = 64
-epochs = 30
+numframes = 660000 # Change to 13 if you want CEPS
+batch_size = 100
+epochs = 35
 num_classes = 10
 SEED = 42
+hop_length = 256
 
 
 # Load training data for each file as integer array using sunau.
@@ -51,35 +53,53 @@ def loadTrainingDataAu():
     for item in training_data:
         print(item)
 
-def loadTrainingDataWav():
+def loadTrainingDataWav(ceps = False):
     training_data = []
     labels = []
     for num, genre in enumerate(genres):
         for track_num, filename in enumerate(os.listdir('genres/genres/' + genre)):
             if not filename.endswith((".wav")):
                 continue
-            sample_rate, X = scipy.io.wavfile.read('genres/genres/' + genre + "/" + filename)
-            # Fast Fourier on readframes data to pull out most important features
-            audio_data = abs(scipy.fft(X)[:numframes])
-            audio_data_list = audio_data.tolist()
-            labels.append(num)
-            training_data.append(audio_data_list)
+            if ceps:
+                audio_data_list = []
+                y, sr = librosa.load('genres/genres/' + genre + "/" + filename)
+                mfcc = librosa.feature.mfcc(y=y, sr=sr, hop_length=hop_length, n_mfcc=13)
+                for cep in mfcc:
+                    audio_data_list.append(np.mean(cep))
+                labels.append(num)
+                training_data.append(audio_data_list)
+
+                # Fast Fourier on readframes data to pull out most important features
+            else:
+                sample_rate, X = scipy.io.wavfile.read('genres/genres/' + genre + "/" + filename)
+                audio_data = abs(scipy.fft(X)[:numframes])
+                audio_data_list = audio_data.tolist()
+                labels.append(num)
+                training_data.append(audio_data_list)
     training_matrix = np.array(training_data)
     print(training_matrix.shape)
     # Convert labels to array of binary values (colloquially known as one hot labels)
     label_matrix_hot = to_categorical(np.array(labels))
     return training_matrix, label_matrix_hot
 
-def loadTestingDataWav():
+def loadTestingDataWav(ceps = False):
     testing_data = []
     for track_num, filename in enumerate(os.listdir('validation/rename/')):
         if not filename.endswith((".wav")):
             continue
-        sample_rate, X = scipy.io.wavfile.read('validation/rename/' + filename)
-        # Fast Fourier on readframes data to pull out most important features
-        audio_data = abs(scipy.fft(X)[:numframes])
-        audio_data_list = audio_data.tolist()
-        testing_data.append(audio_data_list)
+        if ceps:
+            audio_data_list = []
+            y, sr = librosa.load('validation/rename/' + filename)
+            mfcc = librosa.feature.mfcc(y=y, sr=sr, hop_length=hop_length, n_mfcc=13)
+            for cep in mfcc:
+                audio_data_list.append(np.mean(cep))
+            testing_data.append(audio_data_list)
+        else:
+            sample_rate, X = scipy.io.wavfile.read('validation/rename/' + filename)
+            # Fast Fourier on readframes data to pull out most important features
+            audio_data = abs(scipy.fft(X)[:numframes])
+            audio_data_list = audio_data.tolist()
+            testing_data.append(audio_data_list)
     testing_matrix = np.array(testing_data)
     print(testing_matrix.shape)
     return testing_matrix
@@ -104,7 +124,7 @@ def loadCompileModel():
     model.add(Dropout(0.25))
     model.add(Dense(128, activation=tensorflow.nn.relu))
     model.add(Dense(10, activation=tensorflow.nn.softmax))
-    model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=['accuracy'])
+    model.compile(optimizer="nadam", loss="logcosh", metrics=['accuracy'])
     return model
 
 def fitModel(x_train, y_train, x_val, y_val):
@@ -180,7 +200,7 @@ def main():
     training_matrix, label_matrix_hot = loadTrainingDataWav()
     fitModelNoSplit(training_matrix, label_matrix_hot)
     model = loadModelFromJSON()
-    model.compile(optimizer="adam", loss="categorical_crossentropy",metrics=['accuracy'])
+    model.compile(optimizer="nadam", loss="logcosh",metrics=['accuracy'])
     predict(model)
 
 def loadModelFromJSON():
