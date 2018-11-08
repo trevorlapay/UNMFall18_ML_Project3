@@ -1,10 +1,8 @@
-import sunau
 import scipy
 import numpy as np
 import os
 import pickle
 import time
-from scipy.fftpack import fft
 from pathlib import Path
 from scipy.io import wavfile
 import matplotlib.pyplot as plt
@@ -13,46 +11,19 @@ import subprocess
 import tensorflow
 import librosa
 from keras.layers import Dense, Dropout
-from keras.layers import Conv1D
-from keras.models import model_from_json
 from keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.layers import Dense, Dropout
 genres = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
 TRAINING_FILE_NAME = "TrainingData.pkl"
-numframes = 660000 # Change to 13 if you want CEPS
+numframes = 660000 # Default to frequency amplitude frames
 batch_size = 100
-epochs = 35
+epochs = 25
 num_classes = 10
 SEED = 42
 hop_length = 256
 
-
-# Load training data for each file as integer array using sunau.
-# Each class gets an integer value (0-9) appended to each list.
-# Unpack the files in our project directory as-is for this to work.
-
-def loadTrainingDataAu():
-    training_data = []
-    try:
-        training_data = loadPickle(TRAINING_FILE_NAME)
-    except:
-        for num, genre in enumerate(genres):
-            for filename in os.listdir('genres/genres/' + genre):
-                if filename == '.DS_Store':
-                    continue
-                f = sunau.Au_read('genres/genres/' + genre + '/' + filename)
-                # Fast Fourier on readframes data to pull out most important features
-                audio_data = fft(np.frombuffer(f.readframes(numframes), dtype=np.int16))
-                audio_data_list = np.append(audio_data, [num]).tolist()
-                training_data.append(audio_data_list)
-        savePickle(training_data, TRAINING_FILE_NAME)
-        training_data = loadPickle(TRAINING_FILE_NAME)
-
-    # Sanity dump for values.
-    for item in training_data:
-        print(item)
-
+# Loads from training directory. Ceps argument = True if you want to use 13 CEPS features.
 def loadTrainingDataWav(ceps = False):
     training_data = []
     labels = []
@@ -82,6 +53,7 @@ def loadTrainingDataWav(ceps = False):
     label_matrix_hot = to_categorical(np.array(labels))
     return training_matrix, label_matrix_hot
 
+# Loads testing files for preditcion. Ceps = True if you want CEPS features.
 def loadTestingDataWav(ceps = False):
     testing_data = []
     for track_num, filename in enumerate(os.listdir('validation/rename/')):
@@ -104,6 +76,7 @@ def loadTestingDataWav(ceps = False):
     print(testing_matrix.shape)
     return testing_matrix
 
+# Helper for getting filenames for submit file create.
 def getTestingFilenames():
     testfiles= []
     for track_num, filename in enumerate(os.listdir('validation/rename/')):
@@ -112,21 +85,28 @@ def getTestingFilenames():
         testfiles.append(filename[:-4])
     return testfiles
 
+# Split a given data set into both training and testing sets. Useful when tinkering with model.
 def splitTraining(training_matrix, label_matrix_hot):
     (x_train, x_val, y_train, y_val) = train_test_split(training_matrix, label_matrix_hot, test_size=0.3,
                                                         random_state=SEED)
     return x_train, y_train, x_val, y_val
 
-def loadCompileModel():
+# Load and compile a NN model.
+def loadCompileModel(ceps = False):
+    if ceps:
+        shape = 13
+    else:
+        shape = numframes
     model = tensorflow.keras.models.Sequential()
-    model.add(tensorflow.keras.layers.Flatten(input_shape=(numframes, )))
+    model.add(tensorflow.keras.layers.Flatten(input_shape=(shape, )))
     model.add(Dense(128, activation=tensorflow.nn.relu))
-    model.add(Dropout(0.25))
+    model.add(Dropout(0.30))
     model.add(Dense(128, activation=tensorflow.nn.relu))
     model.add(Dense(10, activation=tensorflow.nn.softmax))
-    model.compile(optimizer="nadam", loss="logcosh", metrics=['accuracy'])
+    model.compile(optimizer="nadam", loss="categorical_crossentropy", metrics=['accuracy'])
     return model
 
+# Fit our model to data (with split between train and test)
 def fitModel(x_train, y_train, x_val, y_val):
 
     x_train = tensorflow.keras.utils.normalize(x_train, axis=1)
@@ -135,12 +115,14 @@ def fitModel(x_train, y_train, x_val, y_val):
     model = loadCompileModel()
     model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=1, validation_data=(x_val, y_val))
 
+# Fit our model to data, no splitting (the "production" mode when generating submit files)
 def fitModelNoSplit(x_train, y_train):
     model = loadCompileModel()
     x_train = tensorflow.keras.utils.normalize(x_train, axis=1)
     model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=1)
     evalSerialize(model, x_train, y_train)
 
+# Serialize weights.
 def evalSerialize(model, x_train, y_train):
     # evaluate the model
     scores = model.evaluate(x_train, y_train, verbose=1)
@@ -154,6 +136,7 @@ def evalSerialize(model, x_train, y_train):
     model.save_weights("model.h5")
     print("Saved model to disk")
 
+# Convert au to wav
 def auToWav():
     directories = [Path(tpl[0]) for tpl in os.walk(Path('.'))]
     for directory in directories:
@@ -176,12 +159,12 @@ def spectrograms():
                 plt.show()
                 break # Remove this to plot all the files, not just the first of each genre.
 
-
-def predict(model):
-    prediction = model.predict(loadTestingDataWav())
+# Run prediction and generate submit file. Ceps = True if using Ceps features.
+def predict(model, ceps=False):
+    prediction = model.predict_classes(loadTestingDataWav(ceps))
     predictions = []
     for encoding in prediction:
-        predictions.append(genres[encoding.tolist().index(1)])
+        predictions.append(genres[encoding])
     zip_predictions = zip(getTestingFilenames(), predictions)
     print(zip_predictions)
     file = open('submit.txt', 'w')
@@ -190,7 +173,7 @@ def predict(model):
         file.write(pred[0] + ".au," + pred[1] + '\n')
     file.close()
 
-
+# Note: pass True to loadTrainingDataWav and as second arg in preict() to run CEPS features.
 def main():
     # To generate model files, run the fitModelNoSplit method. This will serialize
     # your weights so you don't need to generate them again.
@@ -198,11 +181,13 @@ def main():
     # auToWav()
     # spectrograms()
     training_matrix, label_matrix_hot = loadTrainingDataWav()
+    # fitModelNoSplit(training_matrix, label_matrix_hot)
     fitModelNoSplit(training_matrix, label_matrix_hot)
     model = loadModelFromJSON()
-    model.compile(optimizer="nadam", loss="logcosh",metrics=['accuracy'])
+    model.compile(optimizer="nadam", loss="categorical_crossentropy",metrics=['accuracy'])
     predict(model)
 
+# load model from JSON file
 def loadModelFromJSON():
     model = loadCompileModel()
     # load weights into new model
