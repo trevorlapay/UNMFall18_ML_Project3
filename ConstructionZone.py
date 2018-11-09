@@ -10,6 +10,7 @@ from matplotlib.pyplot import specgram
 import subprocess
 import tensorflow
 import librosa
+from sklearn import metrics
 from keras.layers import Dense, Dropout
 from keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
@@ -89,7 +90,7 @@ def getTestingFilenames():
 def splitTraining(training_matrix, label_matrix_hot):
     (x_train, x_val, y_train, y_val) = train_test_split(training_matrix, label_matrix_hot, test_size=0.3,
                                                         random_state=SEED)
-    return x_train, y_train, x_val, y_val
+    return x_train, x_val, y_train, y_val
 
 # Load and compile a NN model.
 def loadCompileModel(ceps = False):
@@ -107,13 +108,15 @@ def loadCompileModel(ceps = False):
     return model
 
 # Fit our model to data (with split between train and test)
-def fitModel(x_train, y_train, x_val, y_val):
+def fitModel(x_train, x_val, y_train, y_val):
 
     x_train = tensorflow.keras.utils.normalize(x_train, axis=1)
     x_val = tensorflow.keras.utils.normalize(x_val, axis=1)
 
     model = loadCompileModel()
     model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=1, validation_data=(x_val, y_val))
+    evalSerialize(model, x_train, y_train)
+    return model
 
 # Fit our model to data, no splitting (the "production" mode when generating submit files)
 def fitModelNoSplit(x_train, y_train):
@@ -121,6 +124,7 @@ def fitModelNoSplit(x_train, y_train):
     x_train = tensorflow.keras.utils.normalize(x_train, axis=1)
     model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=1)
     evalSerialize(model, x_train, y_train)
+    return model
 
 # Serialize weights.
 def evalSerialize(model, x_train, y_train):
@@ -173,6 +177,50 @@ def predict(model, ceps=False):
         file.write(pred[0] + ".au," + pred[1] + '\n')
     file.close()
 
+# using labels and training_matrix from training set, predict training set and generate confusion matrix plot
+# try to pull weights from file. Remember to toggle CEPS parameters (this is super manual now and not very elegant)
+def generateConfusionMatrix():
+    training_matrix, label_matrix_hot = loadTrainingDataWav()
+    x_train, x_test, y_train, y_test = splitTraining(training_matrix, label_matrix_hot)
+
+    model = fitModel(x_train, x_test, y_train, y_test)
+    # model = loadModelFromJSON()
+    y_pred = model.predict_classes(x_test)
+    matrix = metrics.confusion_matrix(y_test.argmax(axis=1), y_pred)
+    np.set_printoptions(precision=2)
+    # Plot non-normalized confusion matrix
+    plt.figure()
+    plotConfusionMat(matrix)
+
+def plotConfusionMat(confMat, title="Confusion Matrix"):
+    noDiagConfMat = confMat.copy()
+    for i in range(len(noDiagConfMat)):
+        noDiagConfMat[i, i] = 0
+    noDiagConfMat *= -1
+    confMatFig, confMatAx = plt.subplots(figsize=(10, 10))
+    confMatIm = confMatAx.matshow(noDiagConfMat, cmap=plt.get_cmap("Reds").reversed())
+    confMatAx.set_xticks(np.arange(len(genres)))
+    confMatAx.set_yticks(np.arange(len(genres)))
+    confMatAx.set_xticklabels(genres)
+    confMatAx.set_yticklabels(genres)
+    confMatAx.set_xlabel("Predicted Classes", size=14)
+    confMatAx.set_ylabel("True Classes", size=14)
+    confMatAx.tick_params(top=False, bottom=True, labeltop=False, labelbottom=True)
+    plt.setp(confMatAx.get_xticklabels(), rotation=60, ha="right", rotation_mode="anchor")
+    textcolors=["black", "white"]
+    threshold = confMatIm.norm(noDiagConfMat.max()) / 3
+    for i in range(len(genres)):
+        for j in range(len(genres)):
+            if confMat[i, j] != 0:
+                if i != j and confMatIm.norm(noDiagConfMat[i,j]) < threshold:
+                    color = textcolors[1]
+                else:
+                    color = textcolors[0]
+                confMatAx.text(j, i, confMat[i,j], ha="center", va="center", size=10, color=color)
+    confMatAx.set_title(title, size=16)
+    confMatFig.tight_layout()
+    plt.show()
+
 # Note: pass True to loadTrainingDataWav and as second arg in preict() to run CEPS features.
 def main():
     # To generate model files, run the fitModelNoSplit method. This will serialize
@@ -180,12 +228,13 @@ def main():
     # loadTrainingData()
     # auToWav()
     # spectrograms()
-    training_matrix, label_matrix_hot = loadTrainingDataWav()
+    # training_matrix, label_matrix_hot = loadTrainingDataWav()
     # fitModelNoSplit(training_matrix, label_matrix_hot)
-    fitModelNoSplit(training_matrix, label_matrix_hot)
-    model = loadModelFromJSON()
-    model.compile(optimizer="nadam", loss="categorical_crossentropy",metrics=['accuracy'])
-    predict(model)
+    # fitModelNoSplit(training_matrix, label_matrix_hot)
+    # model = loadModelFromJSON()
+    # model.compile(optimizer="nadam", loss="categorical_crossentropy",metrics=['accuracy'])
+    # predict(model)
+    generateConfusionMatrix()
 
 # load model from JSON file
 def loadModelFromJSON():
