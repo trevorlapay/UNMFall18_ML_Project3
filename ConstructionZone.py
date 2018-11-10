@@ -13,7 +13,7 @@ import librosa
 from sklearn import metrics
 from keras.layers import Dense, Dropout
 from keras.utils import to_categorical
-from sklearn.model_selection import KFold, cross_val_score, train_test_split, StratifiedKFold
+from sklearn.model_selection import cross_val_score, train_test_split, StratifiedKFold
 from tensorflow.python.keras.layers import Dense, Dropout
 
 genres = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
@@ -229,7 +229,9 @@ def kFoldCrossValidation():
     model = loadCompileModel()
     kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=1)
     training_matrix, label_matrix_hot = loadTrainingDataWav()
-    score = cross_val_score(model, training_matrix, cv=kfold)
+    x_train, x_val, y_train, y_val = splitTraining(training_matrix, label_matrix_hot)
+
+    score = cross_val_score(model, x_train, y_train, cv=kfold)
     return score.mean()
 
 
