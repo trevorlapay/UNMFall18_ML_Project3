@@ -13,11 +13,13 @@ import matplotlib.pyplot as plt
 
 AUDIO_TYPE = ".au"
 IMAGE_TYPE = ".png"
+NUM_IMAGE_SLICES = 10
 PLOT_HIGHT = 1 # inches
-DPI = 225 # dots per inch
+PLOT_WIDTH = 30/NUM_IMAGE_SLICES # 1 inch per second
+DPI = 125 # dots per inch (1D so don't square it.)
 REPLACE_EXISTING = False
 PRINT_SKIPS = True
-NUM_THREADS = 8
+NUM_THREADS = 4
 
 pathstr = sys.argv[1] if len(sys.argv) > 1 is not None else "genres/genres/"
 
@@ -30,7 +32,7 @@ class myThread (threading.Thread):
         self.id = threadID
         self.q = q
         self.fig = plt.figure(frameon=False)
-        self.fig.set_size_inches(PLOT_HIGHT*40, PLOT_HIGHT)
+        self.fig.set_size_inches(PLOT_WIDTH, PLOT_HIGHT)
         self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
         self.ax.set_axis_off()
         self.ax.xaxis.set_visible(False)
@@ -57,9 +59,14 @@ def process_data(threadID, q, fig, ax):
 
 def autopng(audPath, imgPath, fig, ax):
     samples, sample_rate = librosa.core.load(audPath)
-    ax.specgram(samples, Fs=sample_rate, cmap='jet')
-#    ax.imshow(your_image, aspect='normal')
-    fig.savefig(imgPath, dpi=DPI, bbox_inches='tight', pad_inches=0)
+    chunkSize = round(len(samples)/NUM_IMAGE_SLICES)
+    sampleChunks = [samples[i:i + chunkSize] 
+                    for i in range(0, len(samples), chunkSize)
+                    if len(samples[i:i + chunkSize]) == chunkSize]
+    for i, chunk in enumerate(sampleChunks):
+        ax.specgram(chunk, Fs=sample_rate, cmap='jet')
+        chunkPath = imgPath.with_name((imgPath.stem[:-2]+'{:02}'+IMAGE_TYPE).format(i))
+        fig.savefig(chunkPath, dpi=DPI, bbox_inches='tight', pad_inches=0)
     ax.clear()
 
 queueLock = threading.Lock()
@@ -79,7 +86,7 @@ for directory in directories:
     indent = ' '*(len(str(directory.parent))+1)
     files = os.listdir(directory)
     for audFile in [f for f in files if f[-len(AUDIO_TYPE):] == AUDIO_TYPE]:
-        imgFile = audFile[:-len(AUDIO_TYPE)]+IMAGE_TYPE
+        imgFile = audFile[:-len(AUDIO_TYPE)]+'.00'+IMAGE_TYPE
         if REPLACE_EXISTING or imgFile not in files:
             print(indent + audFile +" -> "+ imgFile)
             while workQueue.full():
@@ -87,7 +94,7 @@ for directory in directories:
             queueLock.acquire()
             workQueue.put((directory/audFile, directory/imgFile))
             queueLock.release()
-#             break # to only do the first file of the directory
+#            break # to only do the first file of the directory
         elif PRINT_SKIPS:
             print(indent + imgFile + " already exists. Skipping.")
     
