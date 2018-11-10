@@ -13,9 +13,8 @@ import librosa
 from sklearn import metrics
 from keras.layers import Dense, Dropout
 from keras.utils import to_categorical
-from sklearn.model_selection import train_test_split
-from tensorflow.keras.layers import Dense, Dropout
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold, cross_val_score, train_test_split, StratifiedKFold
+from tensorflow.python.keras.layers import Dense, Dropout
 
 genres = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
 TRAINING_FILE_NAME = "TrainingData.pkl"
@@ -223,12 +222,15 @@ def plotConfusionMat(confMat, title="Confusion Matrix"):
     confMatFig.tight_layout()
     plt.show()
 
+
 # Create a 10-Fold Cross Validation Score for a given Model
 # Returns the Cross Validation Score
-def kFoldCrossValidation(model):
+def kFoldCrossValidation():
+    model = loadCompileModel()
+    kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=1)
     training_matrix, label_matrix_hot = loadTrainingDataWav()
-    score = cross_val_score(model, training_matrix, cv=10)
-    return score
+    score = cross_val_score(model, training_matrix, cv=kfold)
+    return score.mean()
 
 
 # Note: pass True to loadTrainingDataWav and as second arg in preict() to run CEPS features.
@@ -244,7 +246,8 @@ def main():
     # model = loadModelFromJSON()
     # model.compile(optimizer="nadam", loss="categorical_crossentropy",metrics=['accuracy'])
     # predict(model)
-    generateConfusionMatrix()
+    #generateConfusionMatrix()
+    kFoldCrossValidation()
 
 # load model from JSON file
 def loadModelFromJSON():
