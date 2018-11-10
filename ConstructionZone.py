@@ -15,6 +15,8 @@ from keras.layers import Dense, Dropout
 from keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.layers import Dense, Dropout
+from sklearn.model_selection import cross_val_score
+
 genres = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
 TRAINING_FILE_NAME = "TrainingData.pkl"
 numframes = 660000 # Default to frequency amplitude frames
@@ -220,6 +222,14 @@ def plotConfusionMat(confMat, title="Confusion Matrix"):
     confMatAx.set_title(title, size=16)
     confMatFig.tight_layout()
     plt.show()
+
+# Create a 10-Fold Cross Validation Score for a given Model
+# Returns the Cross Validation Score
+def kFoldCrossValidation(model):
+    training_matrix, label_matrix_hot = loadTrainingDataWav()
+    score = cross_val_score(model, training_matrix, cv=10)
+    return score
+
 
 # Note: pass True to loadTrainingDataWav and as second arg in preict() to run CEPS features.
 def main():

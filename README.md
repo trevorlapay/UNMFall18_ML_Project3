@@ -1,6 +1,6 @@
 # UNM CS 429/529 Music Classification Project
 
-by Trevor La Pay and Luke Hanks
+by Trevor La Pay, Luke Hanks, and Kyle Jurney
 
 ## Usage
 
