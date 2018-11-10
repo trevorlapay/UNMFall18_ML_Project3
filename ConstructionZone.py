@@ -246,8 +246,8 @@ def main():
     # model = loadModelFromJSON()
     # model.compile(optimizer="nadam", loss="categorical_crossentropy",metrics=['accuracy'])
     # predict(model)
-    #generateConfusionMatrix()
-    kFoldCrossValidation()
+    generateConfusionMatrix()
+    #kFoldCrossValidation()
 
 # load model from JSON file
 def loadModelFromJSON():
