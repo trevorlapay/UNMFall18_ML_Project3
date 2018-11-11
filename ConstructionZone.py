@@ -132,14 +132,12 @@ def evalSerialize(model, x_train, y_train):
     # evaluate the model
     scores = model.evaluate(x_train, y_train, verbose=1)
     print("%s: %.2f%%" % (model.metrics_names[1], scores[1] * 100))
-
     # serialize model to JSON
     model_json = model.to_json()
     with open("model.json", "w") as json_file:
         json_file.write(model_json)
-    # serialize weights to HDF5
     model.save_weights("model.h5")
-    print("Saved model to disk")
+    print("Saved to disk")
 
 # Convert au to wav
 def auToWav():
@@ -226,10 +224,10 @@ def plotConfusionMat(confMat, title="Confusion Matrix"):
 # Create a 10-Fold Cross Validation Score for a given Model
 # Returns the Cross Validation Score
 def kFoldCrossValidation():
-    model = loadCompileModel()
+    model = loadModelFromJSON()
     kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=1)
     training_matrix, label_matrix_hot = loadTrainingDataWav()
-    score = cross_val_score(model, training_matrix, cv=kfold)
+    score = cross_val_score(model, training_matrix, cv=kfold, scoring="accuracy")
     return score.mean()
 
 
@@ -237,17 +235,10 @@ def kFoldCrossValidation():
 def main():
     # To generate model files, run the fitModelNoSplit method. This will serialize
     # your weights so you don't need to generate them again.
-    # loadTrainingData()
     # auToWav()
-    # spectrograms()
-    # training_matrix, label_matrix_hot = loadTrainingDataWav()
-    # fitModelNoSplit(training_matrix, label_matrix_hot)
-    # fitModelNoSplit(training_matrix, label_matrix_hot)
-    # model = loadModelFromJSON()
-    # model.compile(optimizer="nadam", loss="categorical_crossentropy",metrics=['accuracy'])
-    # predict(model)
-    generateConfusionMatrix()
-    #kFoldCrossValidation()
+    training_matrix, label_matrix_hot = loadTrainingDataWav(True)
+    model = fitModelNoSplit(training_matrix, label_matrix_hot)
+    predict(model, True)
 
 # load model from JSON file
 def loadModelFromJSON():
