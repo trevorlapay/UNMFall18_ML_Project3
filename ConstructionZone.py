@@ -123,8 +123,8 @@ def fitModel(x_train, x_val, y_train, y_val):
 def fitModelNoSplit(x_train, y_train):
     model = loadCompileModel()
     x_train = tensorflow.keras.utils.normalize(x_train, axis=1)
-    model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=1)
-    evalSerialize(model, x_train, y_train)
+    model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=0 )
+    # evalSerialize(model, x_train, y_train)
     return model
 
 # Serialize weights.
@@ -230,14 +230,6 @@ def kFoldCrossValidation():
     score = cross_val_score(model, training_matrix, cv=kfold, scoring="accuracy")
     return score.mean()
 
-# Note: pass True to loadTrainingDataWav and as second arg in preict() to run CEPS features.
-def main():
-    # To generate model files, run the fitModelNoSplit method. This will serialize
-    # your weights so you don't need to generate them again.
-    # auToWav()
-    training_matrix, label_matrix_hot = loadTrainingDataWav(True)
-    model = fitModelNoSplit(training_matrix, label_matrix_hot)
-    predict(model, True)
 
 # load model from JSON file
 def loadModelFromJSON():
@@ -262,6 +254,31 @@ def loadPickle(fileName="pickleFile.pkl"):
         obj = pickle.load(pklFile)
         pklFile.close()
     return obj
+
+# k-fold cross validatin at k = 10.
+def kFoldValidate():
+    X, Y = loadTrainingDataWav()
+    # perform 10 fold cross validation on normalized data
+    X = tensorflow.keras.utils.normalize(X, axis=1)
+    kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=7)
+    total_scores = []
+    labels = [np.argmax(y, axis=None, out=None) for y in Y]
+    for train, test in kfold.split(X, labels):
+        model = fitModelNoSplit(X[train], Y[train])
+        # evaluate the model
+        scores = model.evaluate(X[test], Y[test], verbose=0)
+        print("%s: %.2f%%" % (model.metrics_names[1], scores[1] * 100))
+        total_scores.append(scores[1] * 100)
+    print("%.2f%% (+/- %.2f%%)" % (np.mean(total_scores), np.std(total_scores)))
+
+
+# Note: pass True to loadTrainingDataWav and as second arg in preict() to run CEPS features.
+def main():
+    # To generate model files, run the fitModelNoSplit method. This will serialize
+    # your weights so you don't need to generate them again.
+    # auToWav()
+    kFoldValidate()
+
 if __name__ == "__main__": main()
 
 def nowStr(): return time.strftime("%Y-%m-%d_%H-%M-%S")
