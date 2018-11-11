@@ -1,4 +1,3 @@
-
 import sys
 import os
 from pathlib import Path
@@ -10,6 +9,7 @@ import _thread
 import librosa.core
 import matplotlib
 import matplotlib.pyplot as plt
+import itertools
 
 AUDIO_TYPE = ".au"
 IMAGE_TYPE = ".png"
@@ -21,7 +21,14 @@ REPLACE_EXISTING = False
 PRINT_SKIPS = True
 NUM_THREADS = 4
 
-pathstr = sys.argv[1] if len(sys.argv) > 1 is not None else "genres/genres/"
+if len(sys.argv) > 1 and sys.argv[1] is not None:
+    audFiles = Path(sys.argv[1]).glob('**/*'+AUDIO_TYPE)
+    imgFiles = Path(sys.argv[1]).glob('**/*'+IMAGE_TYPE)
+else:
+    audFiles = itertools.chain(Path("genres/genres/").glob('**/*'+AUDIO_TYPE),
+                               Path("validation/rename/").glob('**/*'+AUDIO_TYPE))
+    imgFiles = itertools.chain(Path("genres/genres/").glob('**/*'+IMAGE_TYPE),
+                               Path("validation/rename/").glob('**/*'+IMAGE_TYPE))
 
 exitFlag = 0
 
@@ -70,7 +77,7 @@ def autopng(audPath, imgPath, fig, ax):
     ax.clear()
 
 queueLock = threading.Lock()
-workQueue = queue.Queue(1000)
+workQueue = queue.Queue(100)
 threads = []
 
 # Create new threads
@@ -80,27 +87,18 @@ for threadID in range(1, NUM_THREADS+1):
    threads.append(thread)
 
 # Fill the queue
-directories = [Path(tpl[0]) for tpl in os.walk(Path(pathstr))]
-for directory in directories:
-    print(str(directory))
-    indent = ' '*(len(str(directory.parent))+1)
-    files = os.listdir(directory)
-    for audFile in [f for f in files if f[-len(AUDIO_TYPE):] == AUDIO_TYPE]:
-        imgFile = audFile[:-len(AUDIO_TYPE)]+'.00'+IMAGE_TYPE
-        if REPLACE_EXISTING or imgFile not in files:
-            print(indent + audFile +" -> "+ imgFile)
-            while workQueue.full():
-                time.sleep(1)
-            queueLock.acquire()
-            workQueue.put((directory/audFile, directory/imgFile))
-            queueLock.release()
+for audFile in audFiles:
+    imgFile = audFile.parent/(audFile.stem+'.00'+IMAGE_TYPE)
+    if REPLACE_EXISTING or imgFile not in imgFiles:
+        print(audFile.name +" -> "+ imgFile.name)
+        while workQueue.full():
+            time.sleep(1)
+        queueLock.acquire()
+        workQueue.put((audFile, imgFile))
+        queueLock.release()
 #            break # to only do the first file of the directory
-        elif PRINT_SKIPS:
-            print(indent + imgFile + " already exists. Skipping.")
-    
-    # break to only do the first directory
-#    if len([f for f in files if f[-3:] == AUDIO_TYPE]) > 0:
-#        break
+    elif PRINT_SKIPS:
+        print(imgFile.name + " already exists. Skipping.")
 
 # Wait for queue to empty
 while not workQueue.empty():
