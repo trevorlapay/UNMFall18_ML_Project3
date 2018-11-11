@@ -17,6 +17,7 @@ To run CEPS, put thr following lines of code in main():
     model = fitModelNoSplit(training_matrix, label_matrix_hot)
     predict(model, True) 
 
+The predict() function will output a kaggle-ready file to the root project directory names submit.txt.
 
 ### Requirements
 
