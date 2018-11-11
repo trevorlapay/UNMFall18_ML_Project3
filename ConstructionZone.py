@@ -261,15 +261,15 @@ def kFoldValidate():
     # perform 10 fold cross validation on normalized data
     X = tensorflow.keras.utils.normalize(X, axis=1)
     kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=7)
-    cvscores = []
+    total_scores = []
     labels = [np.argmax(y, axis=None, out=None) for y in Y]
     for train, test in kfold.split(X, labels):
         model = fitModelNoSplit(X[train], Y[train])
         # evaluate the model
         scores = model.evaluate(X[test], Y[test], verbose=0)
         print("%s: %.2f%%" % (model.metrics_names[1], scores[1] * 100))
-        cvscores.append(scores[1] * 100)
-    print("%.2f%% (+/- %.2f%%)" % (np.mean(cvscores), np.std(cvscores)))
+        total_scores.append(scores[1] * 100)
+    print("%.2f%% (+/- %.2f%%)" % (np.mean(total_scores), np.std(total_scores)))
 
 
 # Note: pass True to loadTrainingDataWav and as second arg in preict() to run CEPS features.
