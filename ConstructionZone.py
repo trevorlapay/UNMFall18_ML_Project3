@@ -255,7 +255,7 @@ def loadPickle(fileName="pickleFile.pkl"):
         pklFile.close()
     return obj
 
-
+# k-fold cross validatin at k = 10.
 def kFoldValidate():
     X, Y = loadTrainingDataWav()
     # perform 10 fold cross validation on normalized data
