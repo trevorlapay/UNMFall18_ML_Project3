@@ -11,7 +11,7 @@ To run our best model (frequency intensity), put the following lines of code in 
     model = fitModelNoSplit(training_matrix, label_matrix_hot)
     predict(model)
     
-To run CEPS, put thr following lines of code in main():
+To run CEPS, put the following lines of code in main():
 
     training_matrix, label_matrix_hot = loadTrainingDataWav(True)
     model = fitModelNoSplit(training_matrix, label_matrix_hot)
