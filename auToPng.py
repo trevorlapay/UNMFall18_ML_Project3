@@ -1,3 +1,5 @@
+#%% Imports and constants
+
 import sys
 import os
 from pathlib import Path
@@ -16,10 +18,11 @@ IMAGE_TYPE = ".png"
 NUM_IMAGE_SLICES = 10
 PLOT_HIGHT = 1 # inches
 PLOT_WIDTH = 30/NUM_IMAGE_SLICES # 1 inch per second
-DPI = 125 # dots per inch (1D so don't square it.)
-REPLACE_EXISTING = False
+DPI = 32 # dots per inch (1D so don't square it.)
+REPLACE_EXISTING = True
 PRINT_SKIPS = True
-NUM_THREADS = 4
+CHECK_FOR_MISSING = True
+NUM_THREADS = 8
 
 if len(sys.argv) > 1 and sys.argv[1] is not None:
     audFiles = Path(sys.argv[1]).glob('**/*'+AUDIO_TYPE)
@@ -29,9 +32,9 @@ else:
                                Path("validation/rename/").glob('**/*'+AUDIO_TYPE))
     imgFiles = itertools.chain(Path("genres/genres/").glob('**/*'+IMAGE_TYPE),
                                Path("validation/rename/").glob('**/*'+IMAGE_TYPE))
+    # Note: Chain returns a generator that is only good for one iteration.
 
-exitFlag = 0
-
+#%% Threading
 
 class myThread (threading.Thread):
     def __init__(self, threadID, q):
@@ -67,14 +70,19 @@ def process_data(threadID, q, fig, ax):
 def autopng(audPath, imgPath, fig, ax):
     samples, sample_rate = librosa.core.load(audPath)
     chunkSize = round(len(samples)/NUM_IMAGE_SLICES)
-    sampleChunks = [samples[i:i + chunkSize] 
-                    for i in range(0, len(samples), chunkSize)
-                    if len(samples[i:i + chunkSize]) == chunkSize]
+    sampleChunks = [samples[i:min(i + chunkSize, len(samples)-1)] 
+                    for i in range(0, len(samples), chunkSize)]
     for i, chunk in enumerate(sampleChunks):
+        if i == NUM_IMAGE_SLICES:
+#            print("Too many chunks")
+            break
         ax.specgram(chunk, Fs=sample_rate, cmap='jet')
         chunkPath = imgPath.with_name((imgPath.stem[:-2]+'{:02}'+IMAGE_TYPE).format(i))
         fig.savefig(chunkPath, dpi=DPI, bbox_inches='tight', pad_inches=0)
     ax.clear()
+
+#%% Script
+exitFlag = 0
 
 queueLock = threading.Lock()
 workQueue = queue.Queue(100)
@@ -90,7 +98,7 @@ for threadID in range(1, NUM_THREADS+1):
 for audFile in audFiles:
     imgFile = audFile.parent/(audFile.stem+'.00'+IMAGE_TYPE)
     if REPLACE_EXISTING or imgFile not in imgFiles:
-        print(audFile.name +" -> "+ imgFile.name)
+#        print(audFile.name +" -> "+ imgFile.name)
         while workQueue.full():
             time.sleep(1)
         queueLock.acquire()
@@ -103,6 +111,20 @@ for audFile in audFiles:
 # Wait for queue to empty
 while not workQueue.empty():
    time.sleep(1)
+
+#%%
+if CHECK_FOR_MISSING:
+    audFiles = list(itertools.chain(Path("genres/genres/").glob('**/*'+AUDIO_TYPE),
+                               Path("validation/rename/").glob('**/*'+AUDIO_TYPE)))
+    imgFiles = list(itertools.chain(Path("genres/genres/").glob('**/*'+IMAGE_TYPE),
+                               Path("validation/rename/").glob('**/*'+IMAGE_TYPE)))
+    for audFile in audFiles:
+        for i in range(NUM_IMAGE_SLICES):
+            imgFile = audFile.parent/(audFile.stem+'.{:02}'.format(i)+IMAGE_TYPE)
+            if imgFile not in imgFiles:
+                print(str(imgFile)+" is missing.")
+
+#%%
 
 # Notify threads it's time to exit
 exitFlag = 1
