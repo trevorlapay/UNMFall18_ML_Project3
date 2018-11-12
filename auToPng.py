@@ -1,28 +1,28 @@
 #%% Imports and constants
 
 import sys
-import os
 from pathlib import Path
-import subprocess
 import queue
 import threading
 import time
-import _thread
 import librosa.core
-import matplotlib
 import matplotlib.pyplot as plt
 import itertools
+import io
+from PIL import Image
 
 AUDIO_TYPE = ".au"
 IMAGE_TYPE = ".png"
 NUM_IMAGE_SLICES = 10
 PLOT_HIGHT = 1 # inches
 PLOT_WIDTH = 30/NUM_IMAGE_SLICES # 1 inch per second
-DPI = 32 # dots per inch (1D so don't square it.)
+DPI = 64 # dots per inch (1D so don't square it.)
+ONE_CHANNEL = True
 REPLACE_EXISTING = True
 PRINT_SKIPS = True
 CHECK_FOR_MISSING = True
-NUM_THREADS = 8
+TESTING_ONE = False
+NUM_THREADS = 1 if TESTING_ONE else 4
 
 if len(sys.argv) > 1 and sys.argv[1] is not None:
     audFiles = Path(sys.argv[1]).glob('**/*'+AUDIO_TYPE)
@@ -76,9 +76,20 @@ def autopng(audPath, imgPath, fig, ax):
         if i == NUM_IMAGE_SLICES:
 #            print("Too many chunks")
             break
-        ax.specgram(chunk, Fs=sample_rate, cmap='jet')
+        
         chunkPath = imgPath.with_name((imgPath.stem[:-2]+'{:02}'+IMAGE_TYPE).format(i))
-        fig.savefig(chunkPath, dpi=DPI, bbox_inches='tight', pad_inches=0)
+        if ONE_CHANNEL:
+            ax.specgram(chunk, Fs=sample_rate, cmap='binary')
+            fig_im = io.BytesIO()
+            fig.savefig(fig_im, format='png', dpi=DPI, bbox_inches='tight', pad_inches=0) 
+            fig_im.seek(0)
+            im = Image.open(fig_im)
+            im = im.convert(mode='L')
+            im.save(chunkPath)
+            
+        else:
+            ax.specgram(chunk, Fs=sample_rate, cmap='jet')
+            fig.savefig(chunkPath, dpi=DPI, bbox_inches='tight', pad_inches=0)
     ax.clear()
 
 #%% Script
@@ -104,7 +115,7 @@ for audFile in audFiles:
         queueLock.acquire()
         workQueue.put((audFile, imgFile))
         queueLock.release()
-#            break # to only do the first file of the directory
+        break # to only do the first file of the directory
     elif PRINT_SKIPS:
         print(imgFile.name + " already exists. Skipping.")
 
@@ -112,7 +123,10 @@ for audFile in audFiles:
 while not workQueue.empty():
    time.sleep(1)
 
-#%%
+# Notify threads it's time to exit
+exitFlag = 1
+
+#%% Check for missing spectrograms
 if CHECK_FOR_MISSING:
     audFiles = list(itertools.chain(Path("genres/genres/").glob('**/*'+AUDIO_TYPE),
                                Path("validation/rename/").glob('**/*'+AUDIO_TYPE)))
@@ -124,11 +138,7 @@ if CHECK_FOR_MISSING:
             if imgFile not in imgFiles:
                 print(str(imgFile)+" is missing.")
 
-#%%
-
-# Notify threads it's time to exit
-exitFlag = 1
-
+#%% Wrap up
 # Wait for all threads to complete
 for t in threads:
    t.join()
