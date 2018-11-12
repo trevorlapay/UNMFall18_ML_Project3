@@ -121,7 +121,7 @@ def fitModel(x_train, x_val, y_train, y_val):
 
 # Fit our model to data, no splitting (the "production" mode when generating submit files)
 def fitModelNoSplit(x_train, y_train):
-    model = loadCompileModel(True)
+    model = loadCompileModel()
     x_train = tensorflow.keras.utils.normalize(x_train, axis=1)
     model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=0 )
     # evalSerialize(model, x_train, y_train)
@@ -246,7 +246,7 @@ def loadPickle(fileName="pickleFile.pkl"):
 
 # k-fold cross validation at k = 10.
 def kFoldValidate():
-    X, Y = loadTrainingDataWav(True)
+    X, Y = loadTrainingDataWav()
     # perform 10 fold cross validation on normalized data
     X = tensorflow.keras.utils.normalize(X, axis=1)
     kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=7)
