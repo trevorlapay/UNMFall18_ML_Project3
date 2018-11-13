@@ -13,27 +13,14 @@ import numpy as np
 from tensorflow.keras.layers import Conv2D, MaxPooling2D
 from tensorflow.keras.layers import Activation, Dropout, Flatten, Dense
 from tensorflow.python.keras.models import Sequential
-import h5py
-import data_parser
-import sys
-import os
-from pathlib import Path
-import subprocess
-import queue
-import threading
 import time
-import _thread
-import librosa.core
-import matplotlib
 import matplotlib.pyplot as plt
-import itertools
-import imageio
-import numpy as np
-from tensorflow.keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
-from tensorflow.keras.datasets import cifar10
+from tensorflow.keras.preprocessing.image import array_to_img
 from tensorflow.keras.utils import to_categorical
-from IPython.display import Image, display
+from IPython.display import display
 from tensorflow.keras.callbacks import EarlyStopping
+
+import data_parser
 
 
 # ## Constants and Utilities
@@ -135,15 +122,6 @@ for genre in genres:
     genre_models.append(model)
 
 
-# In[95]:
-
-
-merge_model = tensorflow.keras.models.Sequential()
-merge_model.add(Dense(10, input_dim=10, activation='relu'))
-merge_model.add(Dense(10, activation='softmax'))
-merge_model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=['accuracy'])
-
-
 # ### Train Model
 
 # In[23]:
@@ -184,42 +162,6 @@ for i, history in enumerate(genre_histories):
 
 for i, model in enumerate(genre_models):
     model.save_weights(nowStr() + '_Spectrogram_Classifier_Weights_genre{}.h5'.format(i))
-
-
-# In[49]:
-
-
-def evaluate_confidences(x):
-    y = np.zeros((x.shape[0], 10))
-    for i in range(x.shape[0]):
-        for genre in range(10):
-            y[i, genre] = genre_models[genre].predict(x[i:i+1])[0,0]
-    return y
-
-
-# In[50]:
-
-
-training_confidences = evaluate_confidences(training_data)
-val_confidences = evaluate_confidences(val_data)
-
-
-# In[96]:
-
-
-merge_history = merge_model.fit(training_confidences,
-                                training_labels_onehot,
-                                batch_size=10,
-                                epochs=10,
-                                verbose=1,
-                                validation_data=(val_confidences,
-                                                 val_labels_onehot),
-                               callbacks=[EarlyStopping(monitor='val_loss',
-                                   min_delta=0,
-                                   patience=2,
-                                   verbose=1, mode='auto')])
-plot_loss_curve(merge_history, title_prefix='Merged ')
-plot_acc_curve(merge_history, title_prefix='Merged ')
 
 
 # ### Test Model
@@ -296,68 +238,83 @@ for i in range(0,training_data.shape[0],IMAGE_SLICES):
 print("Accuracy: {}".format(correct/(correct+incorrect)))
 
 
-# In[110]:
+# ## Merging Model
+
+# ### Build Model
+
+# In[95]:
+
+
+merge_model = tensorflow.keras.models.Sequential()
+merge_model.add(Dense(10, input_dim=10, activation='relu'))
+merge_model.add(Dense(10, activation='softmax'))
+merge_model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=['accuracy'])
+
+
+# ### Train Model
+
+# In[49]:
+
+
+def evaluate_confidences(x):
+    y = np.zeros((x.shape[0], 10))
+    for i in range(x.shape[0]):
+        for genre in range(10):
+            y[i, genre] = genre_models[genre].predict(x[i:i+1])[0,0]
+    return y
+
+
+# In[50]:
+
+
+training_confidences = evaluate_confidences(training_data)
+val_confidences = evaluate_confidences(val_data)
+
+
+# In[96]:
+
+
+merge_history = merge_model.fit(training_confidences,
+                                training_labels_onehot,
+                                batch_size=10,
+                                epochs=10,
+                                verbose=1,
+                                validation_data=(val_confidences,
+                                                 val_labels_onehot),
+                               callbacks=[EarlyStopping(monitor='val_loss',
+                                   min_delta=0,
+                                   patience=2,
+                                   verbose=1, mode='auto')])
+plot_loss_curve(merge_history, title_prefix='Merged ')
+plot_acc_curve(merge_history, title_prefix='Merged ')
+
+
+# ### Test Model
+
+# In[121]:
 
 
 correct = 0
 incorrect = 0
 
-for i in range(training_confidences.shape[0]):
-    winner = merge_model.predict_classes(training_confidences[i:i+1])[0]
-    if i %9 == 0 and i > 0:
-        print("{} -> {}".format(training_labels[i,0], winner))
-        print("Accuracy: {}".format(correct/(correct+incorrect)))
-    if winner == training_labels[i,0]:
+for i in range(val_confidences.shape[0]):
+    winner = merge_model.predict_classes(val_confidences[i:i+1])[0]
+    if i % 9 == 0 and i > 0:
+        print("{} -> {}".format(val_labels[i,0], winner))
+    if winner == val_labels[i,0]:
         correct += 1
     else:
         incorrect += 1
 print("Accuracy: {}".format(correct/(correct+incorrect)))
 
 
-# ## Model Based on Trevor's Model
-
-# ### Build Model
-
-# In[ ]:
+# In[119]:
 
 
-model = Sequential()
-model.add(Flatten(input_shape=(IMAGE_HIGHT,
-                               IMAGE_WIDTH,
-                               IMAGE_CHANNELS),
-                  data_format="channels_last"))
-model.add(Dense(128, activation=tensorflow.nn.relu))
-model.add(Dropout(0.30))
-model.add(Dense(128, activation='relu'))
-model.add(Dense(10, activation='softmax'))
-model.compile(optimizer="nadam", loss="categorical_crossentropy", metrics=['accuracy'])
+np.mean(val_labels)
 
 
-# ### Train Model
-
-# In[ ]:
-
-
-history = model.fit(x=training_data,
-                    y=training_labels_onehot,
-                    epochs=30,
-                    batch_size=100,
-                    verbose=1,
-                    validation_data=(val_data, val_labels_onehot),
-                    shuffle=True)
-plot_loss_curve(history)
-plot_acc_curve(history)
-
-
-# ### Test Model
-
-# In[ ]:
-
-
-model.evaluate(training_data, training_labels_onehot)
-
-
-# ## Big Model
+# ## Unified Model
 
 # ### Build Model
 

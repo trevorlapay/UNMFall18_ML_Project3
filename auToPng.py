@@ -18,9 +18,9 @@ PLOT_HIGHT = 1 # inches
 PLOT_WIDTH = 30/NUM_IMAGE_SLICES # 1 inch per second
 DPI = 64 # dots per inch (1D so don't square it.)
 ONE_CHANNEL = True
-REPLACE_EXISTING = True
-PRINT_SKIPS = True
-CHECK_FOR_MISSING = True
+REPLACE_EXISTING = False
+PRINT_SKIPS = False
+CHECK_FOR_MISSING = False
 TESTING_ONE = False
 NUM_THREADS = 1 if TESTING_ONE else 4
 
@@ -50,7 +50,7 @@ class myThread (threading.Thread):
         self.ax.set_aspect('auto')
         self.fig.add_axes(self.ax)
     def run(self):
-        print("Starting thread_" + str(self.id))
+        print("Starting thread_" + str(self.id)+" for making spectrograms.")
         process_data(self.id, self.q, self.fig, self.ax)
         print("Exiting thread_" + str(self.id))
 
@@ -60,7 +60,7 @@ def process_data(threadID, q, fig, ax):
         if not workQueue.empty():
             audPath, imgPath = q.get()
             queueLock.release()
-            print("thread_"+str(threadID)+" processing " + audPath.name)
+            print("thread_"+str(threadID)+" making spectrogram of "+audPath.name)
             autopng(audPath, imgPath, fig, ax)
         else:
             queueLock.release()
@@ -143,4 +143,4 @@ if CHECK_FOR_MISSING:
 # Wait for all threads to complete
 for t in threads:
    t.join()
-print ("Exiting Main Thread")
+print ("Done making spectrograms.\nExiting Main Thread")
