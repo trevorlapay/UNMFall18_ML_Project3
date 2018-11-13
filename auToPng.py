@@ -115,7 +115,8 @@ for audFile in audFiles:
         queueLock.acquire()
         workQueue.put((audFile, imgFile))
         queueLock.release()
-        break # to only do the first file of the directory
+        if TESTING_ONE:
+            break # to only do the first file of the directory
     elif PRINT_SKIPS:
         print(imgFile.name + " already exists. Skipping.")
 
