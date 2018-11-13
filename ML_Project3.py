@@ -268,7 +268,6 @@ def nowStr(): return time.strftime("%Y-%m-%d_%H-%M-%S")
 def main():
     # To generate model files, run the fitModelNoSplit method. This will serialize
     # your weights so you don't need to generate them again.
-    # auToWav()
     kFoldValidate()
 
 
