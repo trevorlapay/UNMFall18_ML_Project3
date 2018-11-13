@@ -25,7 +25,7 @@ model = fitModelNoSplit(training_matrix, label_matrix_hot)
 predict(model, True) 
 ```
 
-The predict() function will output a kaggle-ready file to the root project directory names submit.txt.
+The `predict()` function will output a kaggle-ready file to the root project directory names submit.txt.
 
 ### Spectrogram Model(s)
 
