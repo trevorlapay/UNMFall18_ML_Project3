@@ -5,7 +5,7 @@
 
 # ## Imports
 
-# In[1]:
+# In[ ]:
 
 
 import tensorflow.python.keras
@@ -20,6 +20,14 @@ from tensorflow.keras.utils import to_categorical
 from IPython.display import display
 from tensorflow.keras.callbacks import EarlyStopping
 
+
+# Importing `auToPng` will ensure all the spectrograms are ready.
+# `data_parser` has the functions needed to load the spectrograms.
+
+# In[126]:
+
+
+import auToPng
 import data_parser
 
 
@@ -77,6 +85,8 @@ for i in range(0,training_data.shape[0],450):
 
 
 # ## Binary Model per Genre
+# 
+# Here we make a model for each genre that should classify a given spectrogram as either of that genre or not.
 
 # ### Build Model
 
@@ -165,6 +175,11 @@ for i, model in enumerate(genre_models):
 
 
 # ### Test Model
+# 
+# There are a few different ways to merge the results of the 10 genre based models applied to 10 sectrogram chunks of a song.
+# 
+# We could sum the confidence each model has that it's genre is the right one. We would then pick the genre with the most confident model accross all of the chunks of the song.
+# 
 
 # In[36]:
 
@@ -291,92 +306,29 @@ plot_acc_curve(merge_history, title_prefix='Merged ')
 
 # ### Test Model
 
-# In[121]:
+# In[133]:
+
+
+def merge_chunk_predictions(chunk):
+    predictions = []
+    for i in range(IMAGE_SLICES):
+        predictions.append(merge_model.predict_classes(chunk[i:i+1])[0])
+    return max(set(predictions), key=predictions.count)
+
+
+# In[137]:
 
 
 correct = 0
 incorrect = 0
 
-for i in range(val_confidences.shape[0]):
-    winner = merge_model.predict_classes(val_confidences[i:i+1])[0]
-    if i % 9 == 0 and i > 0:
-        print("{} -> {}".format(val_labels[i,0], winner))
+for i in range(0, val_confidences.shape[0], IMAGE_SLICES):
+    winner = merge_chunk_predictions(val_confidences[i:i+IMAGE_SLICES])
     if winner == val_labels[i,0]:
+        print("  correct {} -> {}".format(val_labels[i,0], winner))
         correct += 1
     else:
+        print("incorrect {} -> {}".format(val_labels[i,0], winner))
         incorrect += 1
 print("Accuracy: {}".format(correct/(correct+incorrect)))
-
-
-# In[119]:
-
-
-np.mean(val_labels)
-
-
-# ## Unified Model
-
-# ### Build Model
-
-# In[ ]:
-
-
-model = Sequential()
-model.add(Conv2D(filters=8, 
-                 kernel_size=2,
-                 strides=1,
-                 input_shape=(IMAGE_HIGHT,
-                              IMAGE_WIDTH,
-                              IMAGE_CHANNELS),
-                 data_format="channels_last"))
-model.add(Activation('relu'))
-model.add(MaxPooling2D(pool_size=2))
-
-model.add(Conv2D(16,2,1))
-model.add(Activation('relu'))
-model.add(MaxPooling2D(pool_size=2))
-
-model.add(Conv2D(32,2,1))
-model.add(Activation('relu'))
-model.add(MaxPooling2D(pool_size=2))
-
-model.add(Conv2D(64,2,1))
-model.add(Activation('relu'))
-model.add(MaxPooling2D(pool_size=2))
-
-model.add(Flatten())
-model.add(Dense(1024))
-model.add(Activation('relu'))
-model.add(Dropout(0.5))
-model.add(Dense(10, activation='softmax'))
-
-#TODO: Change `loss='binary_crossentropy'` to something better for 10 class problems.
-model.compile(loss='categorical_crossentropy',
-              optimizer='nadam',
-              metrics=['accuracy'])
-genre_models.append(model)
-
-
-# ### Train Model
-
-# In[ ]:
-
-
-history = model.fit(x=training_data,
-                    y=training_labels_onehot,
-                    epochs=30,
-                    batch_size=100,
-                    verbose=1,
-                    validation_data=(val_data, val_labels_onehot),
-                    shuffle=True)
-plot_loss_curve(history)
-plot_acc_curve(history)
-
-
-# ### Test Model
-
-# In[ ]:
-
-
-model.evaluate(training_data, training_labels_onehot)
 
